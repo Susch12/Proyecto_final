@@ -1,159 +1,29 @@
-from socket import AF_INET, socket, SOCK_STREAM,SOCK_DGRAM
-from threading import Thread
-import tkinter
-import tkinter.ttk
-import json
-import time
-import random
+import socket
+import threading
 import sys
 
-
-def recibirTCP():
+def send_messages(client_socket, target_ip, target_port):
     while True:
-        try:
-            msg = client_socket.recv(BUFSIZ).decode("utf8")
-            listaEntrada = json.loads(msg)
-            if type(listaEntrada) is dict:
-                conectados = listaEntrada.copy()
-                menuConectados['values'] = list(conectados.keys())
-            else:
-                if 'Selecciona a quien enviar y que método. Bienvenido' == listaEntrada:
-                    entry_field.pack()
-                    send_button.pack()
-                    menuConectados.pack()
-                    entry_field.pack()
-                    tcpRadioBoton.pack()
-                    udpRadioBoton.pack()
-                    loginBoton.pack_forget()
-                    registerBoton.pack_forget()
-                    user.pack_forget()
-                    password.pack_forget()
-                    listaEntrada = 'Selecciona a quien enviar y que método. Bienvenido ' + miUsuario.get()+"."
-                    msg_list.insert(tkinter.END, listaEntrada)
-                if 'Inicia sesion o registrate para chatear' == listaEntrada:
-                    msg_list.insert(tkinter.END, listaEntrada)
-                if 'ERROR: Ya existe usuario, intente de nuevo' == listaEntrada:
-                    msg_list.insert(tkinter.END, listaEntrada)
-                if 'ERROR: No existe usuario o contraseña incorrecta, intente de nuevo' == listaEntrada:
-                    msg_list.insert(tkinter.END, listaEntrada)
-                if listaEntrada == 'Un nuevo usuario se ha conectado, checar abajo':
-                    msg_list.insert(tkinter.END, listaEntrada)
-                if listaEntrada == 'Un usuario ha dejado el chat, checar abajo':
-                    msg_list.insert(tkinter.END, listaEntrada)
-                if listaEntrada[0] == 'Enviar a':
-                    cadena = listaEntrada[2] +" : "+listaEntrada[3]
-                    msg_list.insert(tkinter.END, cadena)
-        except OSError: 
-            break
+        message = input("")
+        client_socket.sendto(message.encode(), (target_ip, target_port))
+        if message.lower() == "exit":
+            sys.exit()
 
-def recibirUDP():
+def receive_messages(client_socket):
     while True:
-        data, addr = UDPSERVER.recvfrom(BUFSIZ)
-        listaEntrada = json.loads(data)
-        cadena = listaEntrada[2] +" : "+listaEntrada[3]
-        msg_list.insert(tkinter.END, cadena)
+        data, addr = client_socket.recvfrom(1024)
+        print(f"Message from {addr}: {data.decode()}")
 
+# Configuración del cliente
+client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-def send(event=None):
-    msg = my_msg.get()
-    msg_list.insert(tkinter.END, miUsuario.get()+"(YO) : "+msg)
-    listaSalida = ['Enviar a',menuConectados.get(),miUsuario.get(),msg]
-    my_msg.set("")
-    if switcher.get() == 1:
-        client_socket.send(bytes(json.dumps(listaSalida), "utf8"))
-    else:
-        UDPSERVER.sendto( bytes( json.dumps (listaSalida) ,"utf-8"), (HOST, UDPPORTSERVER))
-        
-def login():
-    miNombre=miUsuario.get()
-    listaSalida = ['Login',miUsuario.get(), miContrasena.get(),UDPPORTCLIENTE]
-    client_socket.send(bytes(json.dumps(listaSalida), "utf8"))
-    
-def register():
-    miNombre=miUsuario.get()
-    listaSalida = ['Register',miUsuario.get(), miContrasena.get(),UDPPORTCLIENTE]
-    client_socket.send(bytes(json.dumps(listaSalida), "utf8"))
-    
-def salir(event=None):
-    listaSalida = ['*Salir*',miUsuario.get()]
-    client_socket.send(bytes(json.dumps(listaSalida), "utf8"))
-    top.destroy()
-    
+target_ip = input("Enter the target IP: ")
+target_port = int(input("Enter the target port: "))
 
-top = tkinter.Tk()
-#top.title("YisusChat")
-#top.iconbitmap('chat.ico')
+# Iniciar hilos para enviar y recibir mensajes
+send_thread = threading.Thread(target=send_messages, args=(client, target_ip, target_port))
+receive_thread = threading.Thread(target=receive_messages, args=(client,))
 
-messages_frame = tkinter.Frame(top)
-my_msg = tkinter.StringVar()  
-my_msg.set("Escribe tu mensaje aquí")
-miUsuario = tkinter.StringVar() 
-miUsuario.set("Usuario")
-miContrasena = tkinter.StringVar()  
-miContrasena.set("Contraseña")
+send_thread.start()
+receive_thread.start()
 
-scrollbar = tkinter.Scrollbar(messages_frame)
-
-msg_list = tkinter.Listbox(messages_frame, height=30, width=100, yscrollcommand=scrollbar.set)
-scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-msg_list.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
-msg_list.pack()
-messages_frame.pack()
-
-user = tkinter.Entry(top, textvariable=miUsuario)
-user.bind("<Return>", login, register)
-user.pack()
-
-password = tkinter.Entry(top, textvariable=miContrasena)
-password.bind("<Return>", login, register)
-password.pack()
-
-entry_field = tkinter.Entry(top, textvariable=my_msg)
-entry_field.bind("<Return>", send)
-
-send_button = tkinter.Button(top, text="Enviar", command=send)
-
-menuConectados = tkinter.ttk.Combobox(top)
-
-salir_button = tkinter.Button(top, text="Salir", command=send)
-
-loginBoton = tkinter.Button(top, text="Login", command=login)
-loginBoton.pack()
-
-registerBoton = tkinter.Button(top, text="Register", command=register)
-registerBoton.pack()
-
-switcher = tkinter.IntVar(value=1)
-
-tcpRadioBoton = tkinter.Radiobutton(top, text="TCP", state="normal", value="1", variable=switcher)
-udpRadioBoton = tkinter.Radiobutton(top, text="UDP", state="normal",value="2", variable=switcher)
-
-
-top.protocol("WM_DELETE_WINDOW", salir)
-
-HOST = '192.168.98.137'
-MIIP = '192.168.98.137'
-TCPPORT = 8085
-UDPPORTSERVER = 8086
-
-UDPPORTCLIENTE = random.randint(10000,60000)
-
-BUFSIZ = 1024
-
-ADDR = (HOST, TCPPORT)
-client_socket = socket(AF_INET, SOCK_STREAM)
-client_socket.connect(ADDR)
-
-ADDR = (MIIP, UDPPORTCLIENTE)
-UDPSERVER = socket(AF_INET, SOCK_DGRAM)
-UDPSERVER.bind(ADDR)
-
-conectados = {}
-
-recibirTCPHilo = Thread(target=recibirTCP)
-recibirUDPHilo = Thread(target=recibirUDP)
-
-recibirTCPHilo.start()
-recibirUDPHilo.start()
-
-tkinter.mainloop()
